@@ -46,16 +46,15 @@
 #include <pcl/common/concatenate.h>
 
 //////////////////////////////////////////////////////////////////////////
-template <typename PointT> bool
-pcl::SampleConsensusModelStick<PointT>::isSampleGood (const std::vector<int> &samples) const
+template<typename PointT> bool
+pcl::SampleConsensusModelStick<PointT>::isSampleGood(const std::vector<int> &samples) const
 {
-  if (
-      (input_->points[samples[0]].x != input_->points[samples[1]].x)
-    &&
-      (input_->points[samples[0]].y != input_->points[samples[1]].y)
-    &&
-      (input_->points[samples[0]].z != input_->points[samples[1]].z))
+  if ((input_->points[samples[0]].x != input_->points[samples[1]].x)
+       && (input_->points[samples[0]].y != input_->points[samples[1]].y)
+       && (input_->points[samples[0]].z != input_->points[samples[1]].z))
+  {
     return (true);
+  }
 
   return (false);
 }
@@ -77,16 +76,13 @@ pcl::SampleConsensusModelStick<PointT>::computeModelCoefficients (
   model_coefficients[1] = input_->points[samples[0]].y;
   model_coefficients[2] = input_->points[samples[0]].z;
 
-  model_coefficients[3] = input_->points[samples[1]].x;
-  model_coefficients[4] = input_->points[samples[1]].y;
-  model_coefficients[5] = input_->points[samples[1]].z;
+  model_coefficients[3] = input_->points[samples[1]].x - model_coefficients[0];
+  model_coefficients[4] = input_->points[samples[1]].y - model_coefficients[1];
+  model_coefficients[5] = input_->points[samples[1]].z - model_coefficients[2];
 
-//  model_coefficients[3] = input_->points[samples[1]].x - model_coefficients[0];
-//  model_coefficients[4] = input_->points[samples[1]].y - model_coefficients[1];
-//  model_coefficients[5] = input_->points[samples[1]].z - model_coefficients[2];
-
-//  model_coefficients.template segment<3> (3).normalize ();
-  // We don't care about model_coefficients[6] which is the width (radius) of the stick
+  model_coefficients.template segment<3> (3).normalize ();
+  // FIXME: The radius of the stick actually needs to be computed somewhere!
+  model_coefficients[6] = -42.0f;
 
   return (true);
 }
@@ -141,12 +137,8 @@ pcl::SampleConsensusModelStick<PointT>::selectWithinDistance (
 
   // Obtain the line point and direction
   Eigen::Vector4f line_pt1 (model_coefficients[0], model_coefficients[1], model_coefficients[2], 0);
-  Eigen::Vector4f line_pt2 (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
-  Eigen::Vector4f line_dir = line_pt2 - line_pt1;
-  //Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
-  //Eigen::Vector4f line_dir (model_coefficients[3] - model_coefficients[0], model_coefficients[4] - model_coefficients[1], model_coefficients[5] - model_coefficients[2], 0);
+  Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
   line_dir.normalize ();
-  //float norm = line_dir.squaredNorm ();
 
   // Iterate through the 3d points and calculate the distances from them to the line
   for (size_t i = 0; i < indices_->size (); ++i)
@@ -188,12 +180,8 @@ pcl::SampleConsensusModelStick<PointT>::countWithinDistance (
 
   // Obtain the line point and direction
   Eigen::Vector4f line_pt1 (model_coefficients[0], model_coefficients[1], model_coefficients[2], 0);
-  Eigen::Vector4f line_pt2 (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
-  Eigen::Vector4f line_dir = line_pt2 - line_pt1;
+  Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
   line_dir.normalize ();
-
-  //Eigen::Vector4f line_dir (model_coefficients[3] - model_coefficients[0], model_coefficients[4] - model_coefficients[1], model_coefficients[5] - model_coefficients[2], 0);
-  //Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
 
   // Iterate through the 3d points and calculate the distances from them to the line
   for (size_t i = 0; i < indices_->size (); ++i)
@@ -257,6 +245,10 @@ pcl::SampleConsensusModelStick<PointT>::optimizeModelCoefficients (
   pcl::computeCorrespondingEigenVector (covariance_matrix, eigen_values [2], eigen_vector);
 
   optimized_coefficients.template segment<3> (3).matrix () = eigen_vector;
+
+  // FIXME: this is an intermediate solution in order to at least keep the
+  // (debugging) value from the original model coefficients
+  optimized_coefficients[6] = model_coefficients[6];
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -343,8 +335,7 @@ pcl::SampleConsensusModelStick<PointT>::doSamplesVerifyModel (
 
   // Obtain the line point and direction
   Eigen::Vector4f line_pt  (model_coefficients[0], model_coefficients[1], model_coefficients[2], 0);
-  Eigen::Vector4f line_dir (model_coefficients[3] - model_coefficients[0], model_coefficients[4] - model_coefficients[1], model_coefficients[5] - model_coefficients[2], 0);
-  //Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
+  Eigen::Vector4f line_dir (model_coefficients[3], model_coefficients[4], model_coefficients[5], 0);
   line_dir.normalize ();
 
   float sqr_threshold = static_cast<float> (threshold * threshold);
